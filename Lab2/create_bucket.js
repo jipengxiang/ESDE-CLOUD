@@ -13,23 +13,21 @@
 	See the License for the specific language governing permissions and
 	limitations under the License.
 */
-var 
+
+var
     AWS = require("aws-sdk"),
     S3API = new AWS.S3({
         apiVersion: "2006-03-01",
-        region: "<FMI>"
-    });                         
+        region: "us-east-1"
+    });
 
 (function createBucket(){
-	var
+    var
         params = {
             //USE YOUR BUCKET NAME HERE
-            Bucket: "<FMI>", 
+            Bucket: "2019-04-11-er-catlostandfoundwebsite-jipx123",
         };
-        S3API.<FMI>(<FMI>, function(error, data){
-            console.log(error, <FMI>);
+        S3API.createBucket(params, function(error, data){
+            console.log(error, data);
         });
-        //no need to pass the location constraint
-        //for creating a bucket in us-east-1
-        //as you are already using us-east-1 client
 })();
