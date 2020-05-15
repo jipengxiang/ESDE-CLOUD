@@ -22,7 +22,7 @@ var
             }, 
             TableName: "lostcats"
     };
-    DDB.<FMI>(params, function(err, data){
+    DDB.CreateTable(params, function(err, data){
         console.log(err, data);             
     });
 })();
