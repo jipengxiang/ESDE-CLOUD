@@ -1,9 +1,9 @@
 var 
-    AWS = require("aws-sdk"),                              
+    AWS = require("aws-sdk"),                               // Bring in the aws-sdk
     DDB = new AWS.DynamoDB({
         apiVersion: "2012-08-10",
         region: "us-east-1"
-    });                                           
+    });                                                     // Create an S3API object
 
 (function createADataBaseTable(){
     var 
@@ -21,8 +21,8 @@ var
                 WriteCapacityUnits: 1
             }, 
             TableName: "lostcats"
-    };
-    DDB.CreateTable(params, function(err, data){
-        console.log(err, data);             
-    });
+        };
+     DDB.createTable(params, function(err, data){
+         console.log(err, data);             
+     });
 })();
