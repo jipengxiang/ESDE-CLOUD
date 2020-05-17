@@ -5,6 +5,9 @@ var
         region: "us-east-1"
     });                                                     // Create an S3API object
 
+//Why are parenthesis used to wrap a JavaScript function call?  
+//https://www.tutorialspoint.com/Why-are-parenthesis-used-to-wrap-a-JavaScript-function-call
+
 (function createADataBaseTable(){
     var 
         params = {
