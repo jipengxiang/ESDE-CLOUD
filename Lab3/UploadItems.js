@@ -25,7 +25,7 @@ var
      var 
         cat_2 = {
             Item:{
-                "petname1111":{
+                "petname":{
                     S: "Hosepipe"
                 },
                 "breed":{
