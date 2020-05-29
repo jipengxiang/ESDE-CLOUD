@@ -3,7 +3,8 @@ var
     DDB = new AWS.DynamoDB({
         apiVersion: "2012-08-10",
         region: "us-east-1"
-    });                                                     // Create an S3API object
+    });                                                     // Create an DDB object to access DYnamoDB service
+                                                            // DDB -----service client
 
 //Why are parenthesis used to wrap a JavaScript function call?  
 //https://www.tutorialspoint.com/Why-are-parenthesis-used-to-wrap-a-JavaScript-function-call
