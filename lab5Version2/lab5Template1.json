@@ -1,0 +1,353 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "lambda lab",
+    "Parameters": {
+        "VpcCIDR": {
+            "Default": "10.16.0.0/16",
+            "Description": "The CIDR block for the VPC",
+            "Type": "String",
+            "AllowedValues": [
+                "10.16.0.0/16"
+            ]
+        },
+        "SubnetCIDR": {
+            "Default": "10.16.10.0/24",
+            "Description": "CIDR for public subnet",
+            "Type": "String",
+            "AllowedValues": [
+                "10.16.10.0/24"
+            ]
+        },
+        "LabUserId": {
+            "Default": "arn:aws:sts::012345678:assumed-role/vocareum-role/username",
+            "Description": "session user ARN",
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Cloud9 VPC"
+                    }
+                ]
+            }
+        },
+        "subnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "SubnetCIDR"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Cloud9 subnet"
+                    }
+                ]
+            }
+        },
+        "IGW": {
+            "Type": "AWS::EC2::InternetGateway",
+            "DependsOn": "VPC"
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "DependsOn": [
+                "VPC",
+                "IGW"
+            ],
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "IGW"
+                }
+            }
+        },
+        "ec2Route": {
+            "Type": "AWS::EC2::RouteTable",
+            "DependsOn": [
+                "VPC",
+                "AttachGateway"
+            ],
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "routeOut": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": [
+                "ec2Route",
+                "AttachGateway"
+            ],
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "IGW"
+                },
+                "RouteTableId": {
+                    "Ref": "ec2Route"
+                }
+            }
+        },
+        "SubnetRouteAssociate": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "DependsOn": [
+                "ec2Route",
+                "subnet"
+            ],
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "ec2Route"
+                },
+                "SubnetId": {
+                    "Ref": "subnet"
+                }
+            }
+        },
+        "Cloud9": {
+            "Type": "AWS::Cloud9::EnvironmentEC2",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "SubnetId": {
+                    "Ref": "subnet"
+                },
+                "OwnerArn": {
+                    "Ref": "LabUserId"
+                },
+                "Name": "lambda-lab"
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": false,
+                    "IgnorePublicAcls": false,
+                    "BlockPublicPolicy": false,
+                    "RestrictPublicBuckets": false
+                },
+                "WebsiteConfiguration": {
+                    "IndexDocument": "index.html",
+                    "ErrorDocument": "error.html"
+                }
+            }
+        },
+        "S3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3Bucket"
+                },
+                "PolicyDocument": {
+                    "Statement": {
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:ListBucket"
+                        ],
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": "*"
+                        },
+                        "Resource": [
+                            {
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                            },
+                            {
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "3Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "SubnetId": {
+                    "Ref": "subnet"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "S3CopyProfile"
+                },
+                "ImageId": "ami-0de53d8956e8dcf80",
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash -xe\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/index.html s3://${S3Bucket}/index.html\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/main.css s3://${S3Bucket}/main.css\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/main.js s3://${S3Bucket}/main.js\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/config.js s3://${S3Bucket}/config.js\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/jquery-3.4.0.min.js s3://${S3Bucket}/jquery-3.4.0.min.js\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/cat.jpg s3://${S3Bucket}/cat.jpg\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/biggy.png s3://${S3Bucket}/images/biggy.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/cleo.png s3://${S3Bucket}/images/cleo.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/dinka.png s3://${S3Bucket}/images/dinka.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/duchess.png s3://${S3Bucket}/images/duchess.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/felix.png s3://${S3Bucket}/images/felix.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/grumpy.png s3://${S3Bucket}/images/grumpy.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/hosepipe.png s3://${S3Bucket}/images/hosepipe.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/konger.png s3://${S3Bucket}/images/konger.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/mischief.png s3://${S3Bucket}/images/mischief.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/missy.png s3://${S3Bucket}/images/missy.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/mitzy.png s3://${S3Bucket}/images/mitzy.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/natalia.png s3://${S3Bucket}/images/natalia.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/paws.png s3://${S3Bucket}/images/paws.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/peavey.png s3://${S3Bucket}/images/peavey.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/puddles.png s3://${S3Bucket}/images/puddles.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/queenie.png s3://${S3Bucket}/images/queenie.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/reality.png s3://${S3Bucket}/images/reality.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/sally.png s3://${S3Bucket}/images/sally.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/simba.png s3://${S3Bucket}/images/simba.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/socks.png s3://${S3Bucket}/images/socks.png\naws s3 cp s3://awsu-hosting/catwebsite/s3/acd-lambdalab/images/tom.png s3://${S3Bucket}/images/tom.png\n"
+                    }
+                }
+            }
+        },
+        "S3CopyProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "S3CopyRole"
+                    }
+                ]
+            }
+        },
+        "S3CopyPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "S3CopyPolicy",
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:ListBucket",
+                                "s3:PutObject",
+                                "s3:GetObject",
+                                "s3:PubObjectAcl"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "S3CopyRole"
+                    }
+                ]
+            }
+        },
+        "S3CopyRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/"
+            }
+        },
+        "LambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSLambdaExecute",
+                    "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess"
+                ],
+                "RoleName": "cat-search-role-for-lambda",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LostCats": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "petname",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "breed",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "petname",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": "1",
+                    "WriteCapacityUnits": "1"
+                },
+                "TableName": "lostcats",
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "breed_index",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "breed",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": "1",
+                            "WriteCapacityUnits": "1"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "S3Bucket": {
+            "Description": "Name of S3 bucket",
+            "Value": {
+                "Ref": "S3Bucket"
+            }
+        },
+        "WebsiteURL": {
+            "Description": "URL for website hosted on S3",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3Bucket",
+                    "WebsiteURL"
+                ]
+            }
+        },
+        "RoleArn": {
+            "Description": "The ARN of the Lambda role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaRole",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}
